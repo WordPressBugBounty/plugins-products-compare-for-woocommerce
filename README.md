@@ -1,0 +1,1 @@
+# plugins-products-compare-for-woocommerce
