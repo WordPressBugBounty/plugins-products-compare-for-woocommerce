@@ -13,12 +13,6 @@ class ET_Builder_Module_br_compare_widget extends ET_Builder_Module {
 		$this->folder_name = 'et_pb_berocket_modules';
 		$this->main_css_element = '%%order_class%%';
 
-        $this->whitelisted_fields = array(
-            'fast_compare',
-            'type',
-            'toolbar',
-        );
-
         $this->fields_defaults = array(
             'fast_compare'          => array('off'),
             'type'                  => array('image'),

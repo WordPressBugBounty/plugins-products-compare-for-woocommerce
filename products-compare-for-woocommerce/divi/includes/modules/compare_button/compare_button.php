@@ -15,13 +15,6 @@ class ET_Builder_Module_compare_button extends ET_Builder_Module {
 		$this->folder_name = 'et_pb_berocket_modules';
 		$this->main_css_element = '%%order_class%%';
 
-        $this->whitelisted_fields = array(
-            'product',
-            'fast_compare',
-            'added_compare',
-            'add_compare',
-        );
-
         $this->fields_defaults = array(
             'product'           => array(''),
             'fast_compare'      => array('on', 'add_default_setting'),
