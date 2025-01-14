@@ -1340,7 +1340,9 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         return ob_get_clean();
     }
     public function divi_initialize_extension() {
-        require_once plugin_dir_path( __FILE__ ) . 'divi/includes/CompareExtension.php';
+        if( class_exists('DiviExtension') ) {
+            require_once plugin_dir_path( __FILE__ ) . 'divi/includes/CompareExtension.php';
+        }
     }
 }
 
