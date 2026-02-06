@@ -25,7 +25,7 @@ if( ! is_array($products) ) {
 foreach( $products as &$product_id ) {
     $product_id = intval($product_id);
 }
-if( $br_compare_apply_filters ) {
+if( $br_compare_apply_filters && is_array($products) && count($products) > 0 ) {
     $query = new WP_Query(apply_filters('woocommerce_shortcode_products_query', array('post_type' => 'product', 'fields' => 'ids', 'post__in' => $products), array(), 'products'));
     $products = $query->get_posts();
 }
