@@ -1217,24 +1217,6 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                 ),
             ),
             'Custom CSS/JavaScript' => array(
-                'global_font_awesome_disable' => array(
-                    "label"     => __( 'Disable Font Awesome', "products-compare-for-woocommerce" ),
-                    "type"      => "checkbox",
-                    "name"      => "fontawesome_frontend_disable",
-                    "value"     => '1',
-                    'label_for' => __('Don\'t load Font Awesome css files on site front end. Use it only if you don\'t use Font Awesome icons in widgets or your theme has Font Awesome.', 'products-compare-for-woocommerce'),
-                ),
-                'global_fontawesome_version' => array(
-                    "label"    => __( 'Font Awesome Version', "products-compare-for-woocommerce" ),
-                    "name"     => "fontawesome_frontend_version",
-                    "type"     => "selectbox",
-                    "options"  => array(
-                        array('value' => '', 'text' => __('Font Awesome 4', 'products-compare-for-woocommerce')),
-                        array('value' => 'fontawesome5', 'text' => __('Font Awesome 5', 'products-compare-for-woocommerce')),
-                    ),
-                    "value"    => '',
-                    "label_for" => __('Version of Font Awesome that will be used on front end. Please select version that you have in your theme', 'products-compare-for-woocommerce'),
-                ),
                 array(
                     "label"   => __("Custom CSS", 'products-compare-for-woocommerce'),
                     "name"    => array("javascript_settings", "custom_css"),
