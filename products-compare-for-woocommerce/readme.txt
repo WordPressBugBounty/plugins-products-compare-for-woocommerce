@@ -5,7 +5,7 @@ Donate link: https://berocket.com/?utm_source=wordpress_org&utm_medium=donate&ut
 Tags: products, products compare, product comparison, woocommerce compare, products differences, comparison, products diff, compare products, compare table, woocommerce compare products, woocommerce table compare, woocommerce compare items, custom compare page, add to compare button, widget with selected products to compare, products to compare widget, select attributes for compare, customize for compare buttons, Customize for compare page, custom compare buttons, berocket, berocket products compare for woocommerce
 Requires at least: 5.0
 Tested up to: 6.9.3
-Stable tag: 3.6.2.3
+Stable tag: 3.6.2.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -86,6 +86,10 @@ If none of the previous listed actions helps you solve the problem, then, submit
 ---
 
 == Changelog ==
+
+= 3.6.2.4 =
+* Enhancement - Compatibility with other BeRocket plugins
+* Fix - Updater PHP error
 
 = 3.6.2.3 =
 * Enhancement - Compatibility version: Wordpress 6.9.3 and WooCommerce 10.6
