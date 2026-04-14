@@ -2,7 +2,7 @@
 Plugin Name: Products Compare for WooCommerce
 Contributors: berocket, dholovnia
 Donate link: https://berocket.com/?utm_source=wordpress_org&utm_medium=donate&utm_campaign=compare_products
-Tags: products, products compare, product comparison, woocommerce compare, products differences, comparison, products diff, compare products, compare table, woocommerce compare products, woocommerce table compare, woocommerce compare items, custom compare page, add to compare button, widget with selected products to compare, products to compare widget, select attributes for compare, customize for compare buttons, Customize for compare page, custom compare buttons, berocket, berocket products compare for woocommerce
+Tags: compare, comparison, woocommerce, product comparison, table
 Requires at least: 5.0
 Tested up to: 6.9.3
 Stable tag: 3.6.2.4
@@ -14,6 +14,11 @@ Allow your users to compare products of your shop by attributes and price.
 == Description ==
 
 Allows customers to compare products. Your customers can make better buying decisions on products they want and need. Products Compare for WooCommerce allows users to firstly add products to a compare list, then at the click of a mouse the chosen products can be viewed in a comparison table.
+
+= 🚀 Spring Premium Days is LIVE! =
+**Save 30%** on Pro features across BeRocket plugins. 
+*Boost your store performance and UX with our exclusive seasonal offer.*
+🌿 Improve your store today. [**Limited time offer!**](https://berocket.com/plugins/?utm_source=free_plugin&utm_medium=wporg&utm_campaign=spring_2026&utm_content=top_ad_cta&utm_term=compare_products)
 
 = Features: =
 &#9989; Compare Page
