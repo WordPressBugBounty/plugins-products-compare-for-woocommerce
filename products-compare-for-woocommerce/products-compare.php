@@ -3,7 +3,7 @@
  * Plugin Name: Products Compare for WooCommerce
  * Plugin URI: https://wordpress.org/plugins/products-compare-for-woocommerce/
  * Description: Plugin for WooCommerce which compare products
- * Version: 3.6.2.6
+ * Version: 3.6.2.7
  * Author: BeRocket
  * Requires at least: 5.0
  * Tested up to: 6.9.4
@@ -14,6 +14,6 @@
  * Domain Path: /languages/
  * WC tested up to: 10.7
  */
-define( "BeRocket_Compare_Products_version", '3.6.2.6' );
+define( "BeRocket_Compare_Products_version", '3.6.2.7' );
 define( "BeRocket_Compare_Products_file", __FILE__ );
 include_once('main.php');
