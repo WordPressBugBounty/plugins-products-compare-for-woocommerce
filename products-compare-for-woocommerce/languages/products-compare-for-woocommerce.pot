@@ -368,10 +368,18 @@ msgid "Column minimum width"
 msgstr ""
 
 #: templates/style_section.php:116
+msgid "Image size"
+msgstr ""
+
+#: templates/style_section.php:129
 msgid "Image width"
 msgstr ""
 
-#: templates/style_section.php:117
+#: templates/style_section.php:131
+msgid "Image height"
+msgstr ""
+
+#: templates/style_section.php:118
 msgid "Padding top"
 msgstr ""
 

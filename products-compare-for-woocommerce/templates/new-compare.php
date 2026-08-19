@@ -14,26 +14,21 @@ $options_global = $BeRocket_Compare_Products->get_option();
 $options = $options_global['general_settings'];
 $style = $options_global['style_settings'];
 $text = $options_global['text_settings'];
-if( isset($_GET['compare']) && $_GET['compare'] ) {
-   $products = explode(',', $_GET['compare']);
-} else {
-    $products = $BeRocket_Compare_Products->get_all_compare_products();
-}
-if( ! is_array($products) ) {
-    $products = array();
-}
-foreach( $products as &$product_id ) {
-    $product_id = intval($product_id);
-}
+$br_compare_apply_filters = ! empty( $br_compare_apply_filters );
+$products = $BeRocket_Compare_Products->get_compare_request_products();
 if( $br_compare_apply_filters && is_array($products) && count($products) > 0 ) {
     $query = new WP_Query(apply_filters('woocommerce_shortcode_products_query', array('post_type' => 'product', 'fields' => 'ids', 'post__in' => $products), array(), 'products'));
-    $products = $query->get_posts();
+    $products = $BeRocket_Compare_Products->sanitize_compare_product_ids( $query->get_posts() );
 }
 if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
     foreach ( $products as $i => $product ) {
         $current_language= apply_filters( 'wpml_current_language', NULL );
         $product = apply_filters( 'wpml_object_id', $product, 'product', true, $current_language );
         $term = array();
+        if ( ! $BeRocket_Compare_Products->is_public_compare_product( $product ) ) {
+            unset( $products[$i] );
+            continue;
+        }
         $post_get = wc_get_product($product);
         if( $post_get === false ) {
             unset($products[$i]);
@@ -79,6 +74,9 @@ if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
     foreach ( $products as $product ) {
         $current_language= apply_filters( 'wpml_current_language', NULL );
         $product = apply_filters( 'wpml_object_id', $product, 'product', true, $current_language );
+        if ( ! $BeRocket_Compare_Products->is_public_compare_product( $product ) ) {
+            continue;
+        }
         $post = get_post($product);
         $term = array();
         $post_get = wc_get_product($product);
@@ -93,7 +91,19 @@ if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
         $term['price'] = $post_get->get_price_html();
         $term['link'] = $post_get->get_permalink();
         $term['short_description'] = get_the_excerpt($product);
-        $description_length = max(strlen($term['short_description']), $description_length);
+        $description_text = wp_strip_all_tags( $term['short_description'], true );
+        $description_text = html_entity_decode(
+            $description_text,
+            ENT_QUOTES | ENT_HTML5,
+            get_bloginfo( 'charset' )
+        );
+        $description_text = preg_replace( '/\s+/u', ' ', $description_text );
+        $description_text = trim( $description_text );
+
+        $description_length = max(
+            mb_strlen( $description_text, 'UTF-8' ),
+            $description_length
+        );
         //$term['availability'] = $post_get->stock_status;
         $term['availability'] = $post_get->get_availability();
         $term['is_in_stock'] = $post_get->is_in_stock();
@@ -150,7 +160,7 @@ if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
                 $custom_result = '';
                 $same_check = array();
                 foreach( $attributes_value[$key] as $cutom_term ) {
-                    $custom_result .= '<p>'.$cutom_term->name.'</p>';
+                    $custom_result .= '<p>'.esc_html( $cutom_term->name ).'</p>';
                     $same_check[] = $cutom_term->slug;
                 }
                 if( isset($same['custom'][$key]) ) {
@@ -199,7 +209,7 @@ if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
             $same_check = array();
             foreach( $attributes_value[$key] as $cutom_term ) {
                 if( is_string($cutom_term) && strlen($cutom_term) > 0 ) {
-                    $custom_result .= '<p>'.$cutom_term.'</p>';
+                    $custom_result .= '<p>'.wp_kses_post( $cutom_term ).'</p>';
                     $same_check[] = $cutom_term;
                 }
             }
@@ -234,15 +244,12 @@ if ( isset( $products ) && is_array( $products ) && count( $products ) > 0 ) {
         //================================================================
         $terms[] = $term;
     }
-    $colwidth = $style['table']['colwidth'];
+    $colwidth = isset( $style['table']['colwidth'] ) ? (float) $style['table']['colwidth'] : 0;
     if( empty($colwidth) ) {
         $colwidth = 200;
     }
-    $colwidth = $colwidth - 10;
-    if( $colwidth < 0 ) {
-        $colwidth = 25;
-    }
-    $description_width = $description_length * 16;
+    $colwidth = max(25, $colwidth - 10);
+    $description_width = $description_length * 10;
     $description_lines = $description_width / $colwidth;
     $description_lines = (int)$description_lines;
     $description_lines += 2;
@@ -278,19 +285,19 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
     echo '<div class="br_new_compare_full_size br_full_size_close" style="display:none;"><a href="#full-screen-close"><i class="fa fa-times"></i></a></div>';
 }
 ?>
-<div class="br_compare_popup_block"<?php if(! empty($berocket_element_i)) echo ' id="br_popup_'.$berocket_element_i.'"'; ?>>
+<div class="br_compare_popup_block"<?php if(! empty($berocket_element_i)) echo ' id="br_popup_'.absint( $berocket_element_i ).'"'; ?>>
 <div class="br_new_compare_block" data-table_scroll="0" data-table_hidden_scroll="0" data-is_full_screen="<?php echo (empty($is_full_screen) ? "0" : "1"); ?>">
 <div style="clear:both;"></div>
 <div class="br_top_table">
 <?php
     if( $have_dif && ! empty($options['hide_same_button']) ) {
-        echo '<a class="br_show_compare_dif'.($options['hide_same_default'] ? ' br_hidden_same' : '').'" href="#difference">'.($options['hide_same_default'] 
+        echo '<a class="br_show_compare_dif'.(! empty( $options['hide_same_default'] ) ? ' br_hidden_same' : '').'" href="#difference">'.esc_html( ! empty( $options['hide_same_default'] )
             ? (empty($text['show_same_button_text']) ? __( 'Show attributes with same values', 'products-compare-for-woocommerce' ) : $text['show_same_button_text']) 
             : (empty($text['hide_same_button_text']) ? __( 'Hide attributes with same values', 'products-compare-for-woocommerce' ) : $text['hide_same_button_text']) 
         ).'</a>';
     }
     if( ! empty($options['remove_all_compare']) ) {
-        echo '<a class="br_remove_all_compare" href="#remove_all">'.(empty($text['remove_all_compare_text']) ? __( 'Clear compare list', 'products-compare-for-woocommerce' ) : $text['remove_all_compare_text']).'</a>';
+        echo '<a class="br_remove_all_compare" href="#remove_all">'.esc_html( empty($text['remove_all_compare_text']) ? __( 'Clear compare list', 'products-compare-for-woocommerce' ) : $text['remove_all_compare_text'] ).'</a>';
     }
     $top_table_html = '
         <table>';
@@ -299,10 +306,10 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
             <tr><td></td>';
     foreach ( $terms as $term ) {
         $top_table_html .= '<th><div>
-            <h3><a href="'.$term['link'].'">'.$term['title'].'</a></h3>';
+            <h3><a href="'.esc_url( $term['link'] ).'">'.esc_html( $term['title'] ).'</a></h3>';
         $top_table_term2 = '';
         if ( ! is_array( $options['attributes'] ) || in_array( 'cp_price', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) {
-            $top_table_term2 .= '<p class="br_compare_price price">'.$term['price'].'</p>';
+            $top_table_term2 .= '<p class="br_compare_price price">'.wp_kses_post( $term['price'] ).'</p>';
         }
         if ( is_array( $options['attributes'] ) && in_array( 'cp_add_to_cart', $options['attributes'] ) ) {
             $product = wc_get_product($term['id']);
@@ -318,7 +325,7 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
         }
         $default_language= apply_filters( 'wpml_default_language', NULL );
         $default_product = apply_filters( 'wpml_object_id', $term['id'], 'product', true, $default_language );
-        $top_table_html .= '<a href="#remove" class="br_remove_compare_product_reload" data-id="'.$default_product.'"><i class="fa fa-times"></i></a>';
+        $top_table_html .= '<a href="#remove" class="br_remove_compare_product_reload" data-id="'.absint( $default_product ).'"><i class="fa fa-times"></i></a>';
         $top_table_html .= '</div></th>';
     }
     $top_table_html .= '
@@ -343,29 +350,30 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
     <?php 
     }
     if ( ! is_array( $options['attributes'] ) || in_array( 'cp_available', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) {
-        echo '<tr class="br_absolute2_cp_availability"><th>'.(empty($text['availability']) ? __( 'Availability', 'products-compare-for-woocommerce' ) : $text['availability']).'</th></tr>';
+        echo '<tr class="br_absolute2_cp_availability"><th>'.esc_html( empty($text['availability']) ? __( 'Availability', 'products-compare-for-woocommerce' ) : $text['availability'] ).'</th></tr>';
     }
     if ( ! is_array( $options['attributes'] ) || in_array( 'cp_short_description', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) { ?>
-    <tr class="br_description_row"><th><?php echo (empty($text['description']) ? __( 'Description', 'products-compare-for-woocommerce' ) : $text['description']); ?></th></tr>
+    <tr class="br_description_row"><th><?php echo esc_html( empty($text['description']) ? __( 'Description', 'products-compare-for-woocommerce' ) : $text['description'] ); ?></th></tr>
     <?php 
     }
     if ( is_array( $name['attributes'] ) && count( $name['attributes'] ) > 0 ) {
-        echo '<tr><th class="br_lined_attribute_left">'.(empty($text['attribute']) ? __( 'Attributes', 'products-compare-for-woocommerce' ) : $text['attribute']).'</th></tr>';
+        echo '<tr><th class="br_lined_attribute_left">'.esc_html( empty($text['attribute']) ? __( 'Attributes', 'products-compare-for-woocommerce' ) : $text['attribute'] ).'</th></tr>';
         foreach ( $name['attributes'] as $attr => $name_attr ) {
-            echo '<tr class="'.(is_array($same['attributes'][$attr]) && count($same['attributes'][$attr]) ? ' br_same_attr' : '').'" style="height:'.(15 + 20 * (empty($attr_count['attributes'][$attr]) ? '1' : $attr_count['attributes'][$attr])).'px!important;"><th>'.$name_attr.'</th></tr>';
+            echo '<tr class="'.(is_array($same['attributes'][$attr]) && count($same['attributes'][$attr]) ? ' br_same_attr' : '').'" style="height:'.absint( 15 + 20 * (empty($attr_count['attributes'][$attr]) ? 1 : $attr_count['attributes'][$attr]) ).'px!important;"><th>'.esc_html( $name_attr ).'</th></tr>';
         }
     }
     if ( is_array( $name['custom'] ) && count( $name['custom'] ) > 0 ) {
         if ( is_array( $name['custom'] ) && count( $name['custom'] ) > 0 ) {
-            echo '<tr><th class="br_lined_attribute_left">'.(empty($text['custom']) ? __( 'Other attributes', 'products-compare-for-woocommerce' ) : $text['custom']).'</th></tr>';
+            echo '<tr><th class="br_lined_attribute_left">'.esc_html( empty($text['custom']) ? __( 'Other attributes', 'products-compare-for-woocommerce' ) : $text['custom'] ).'</th></tr>';
             foreach ( $name['custom'] as $attr => $name_attr ) {
-                echo '<tr class="'.(is_array($same['custom'][$attr]) && count($same['custom'][$attr]) ? ' br_same_attr' : '').'" style="height:'.(15 + 20 * (empty($attr_count['custom'][$attr]) ? '1' : $attr_count['custom'][$attr])).'px!important;"><th>'.$name_attr.'</th></tr>';
+                echo '<tr class="'.(is_array($same['custom'][$attr]) && count($same['custom'][$attr]) ? ' br_same_attr' : '').'" style="height:'.absint( 15 + 20 * (empty($attr_count['custom'][$attr]) ? 1 : $attr_count['custom'][$attr]) ).'px!important;"><th>'.esc_html( $name_attr ).'</th></tr>';
             }
         }
     }
     if ( is_array( $name['acf'] ) && count( $name['acf'] ) > 0 ) {
         foreach ( $name['acf'] as $attr => $name_attr ) {
-            echo '<tr class="'.(is_array($same['acf'][$attr]) && count($same['acf'][$attr]) ? ' br_same_attr' : '').'" style="'.apply_filters('berocket_compare_acf_product_field_height', 'height:'.(15 + 20 * (empty($attr_count['acf'][$attr]) ? '1' : $attr_count['acf'][$attr])).'px!important;', $acf_field_list[$attr]) . '"><th>'.$name_attr.'</th>';
+            $row_style = apply_filters('berocket_compare_acf_product_field_height', 'height:'.absint( 15 + 20 * (empty($attr_count['acf'][$attr]) ? 1 : $attr_count['acf'][$attr]) ).'px!important;', $acf_field_list[$attr]);
+            echo '<tr class="'.(is_array($same['acf'][$attr]) && count($same['acf'][$attr]) ? ' br_same_attr' : '').'" style="'.esc_attr( safecss_filter_attr( $row_style ) ).'"><th>'.esc_html( $name_attr ).'</th>';
         }
     }
     ?>
@@ -379,7 +387,7 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
         <?php 
         foreach ( $terms as $term ) {
             echo '<th>';
-                echo '<a href="'.$term['link'].'">'.$term['image'].'</a>';
+                echo '<a href="'.esc_url( $term['link'] ).'">'.wp_kses_post( $term['image'] ).'</a>';
             echo '</th>';
         }
         ?>
@@ -390,7 +398,7 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
     <?php
     if ( ! is_array( $options['attributes'] ) || in_array( 'cp_available', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) {
         echo '<tr>';
-        echo '<th>'.(empty($text['availability']) ? __( 'Availability', 'products-compare-for-woocommerce' ) : $text['availability']).'</th>';
+        echo '<th>'.esc_html( empty($text['availability']) ? __( 'Availability', 'products-compare-for-woocommerce' ) : $text['availability'] ).'</th>';
         foreach ( $terms as $term ) {
             $class_stock = '';
             $text_stock = '';
@@ -408,49 +416,50 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
                     $text_stock = __( 'Out of stock', 'woocommerce' );
                     $class_stock = 'out-of-stock';
                 }
-                $text_stock = '<p class="stock '.$class_stock.'">'.$text_stock.'</p>';
+                $text_stock = '<p class="stock '.esc_attr( $class_stock ).'">'.esc_html( $text_stock ).'</p>';
             }
             echo '<td>';
-            echo $text_stock;
+            echo wp_kses_post( $text_stock );
             echo '</td>';
         }
         echo '</tr>';
     }
     if ( ! is_array( $options['attributes'] ) || in_array( 'cp_short_description', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) {
         echo '<tr class="br_description_row">';
-        echo '<th>' . (empty($text['description']) ? __( 'Description', 'products-compare-for-woocommerce' ) : $text['description']) . '</th>';
+        echo '<th>' . esc_html( empty($text['description']) ? __( 'Description', 'products-compare-for-woocommerce' ) : $text['description'] ) . '</th>';
         foreach ( $terms as $term ) {
             echo '<td><div>';
-            echo $term['short_description'];
+            echo wp_kses_post( $term['short_description'] );
             echo '</div></td>';
         }
         echo '</tr>';
     }
     if ( is_array( $name['attributes'] ) && count( $name['attributes'] ) > 0 ) {
-        echo '<tr><th class="br_lined_attribute_left">'.(empty($text['attribute']) ? __( 'Attributes', 'products-compare-for-woocommerce' ) : $text['attribute']).'</th><td class="br_lined_attribute_right" colspan="'.(count($terms)).'"></td></tr>';
+        echo '<tr><th class="br_lined_attribute_left">'.esc_html( empty($text['attribute']) ? __( 'Attributes', 'products-compare-for-woocommerce' ) : $text['attribute'] ).'</th><td class="br_lined_attribute_right" colspan="'.absint( count($terms) ).'"></td></tr>';
         foreach ( $name['attributes'] as $attr => $name_attr ) {
-            echo '<tr class="'.(is_array($same['attributes'][$attr]) && count($same['attributes'][$attr]) ? ' br_same_attr' : '').'" style="height:'.(15 + 20 * (empty($attr_count['attributes'][$attr]) ? '1' : $attr_count['attributes'][$attr])).'px!important;"><th>'.$name_attr.'</th>';
+            echo '<tr class="'.(is_array($same['attributes'][$attr]) && count($same['attributes'][$attr]) ? ' br_same_attr' : '').'" style="height:'.absint( 15 + 20 * (empty($attr_count['attributes'][$attr]) ? 1 : $attr_count['attributes'][$attr]) ).'px!important;"><th>'.esc_html( $name_attr ).'</th>';
             foreach ( $terms as $term ) {
-                echo '<td>'.br_get_value_from_array($term, array('attributes', $attr)).'</td>';
+                echo '<td>'.wp_kses_post( br_get_value_from_array($term, array('attributes', $attr)) ).'</td>';
             }
             echo '</tr>';
         } 
     }
     if ( is_array( $name['custom'] ) && count( $name['custom'] ) > 0 ) {
-        echo '<tr><th class="br_lined_attribute_left">'.(empty($text['custom']) ? __( 'Other attributes', 'products-compare-for-woocommerce' ) : $text['custom']).'</th><td class="br_lined_attribute_right" colspan="'.(count($terms)).'"></td></tr>';
+        echo '<tr><th class="br_lined_attribute_left">'.esc_html( empty($text['custom']) ? __( 'Other attributes', 'products-compare-for-woocommerce' ) : $text['custom'] ).'</th><td class="br_lined_attribute_right" colspan="'.absint( count($terms) ).'"></td></tr>';
         foreach ( $name['custom'] as $attr => $name_attr ) {
-            echo '<tr class="'.(is_array($same['custom'][$attr]) && count($same['custom'][$attr]) ? ' br_same_attr' : '').'" style="height:'.(15 + 20 * (empty($attr_count['custom'][$attr]) ? '1' : $attr_count['custom'][$attr])).'px!important;"><th>'.$name_attr.'</th>';
+            echo '<tr class="'.(is_array($same['custom'][$attr]) && count($same['custom'][$attr]) ? ' br_same_attr' : '').'" style="height:'.absint( 15 + 20 * (empty($attr_count['custom'][$attr]) ? 1 : $attr_count['custom'][$attr]) ).'px!important;"><th>'.esc_html( $name_attr ).'</th>';
             foreach ( $terms as $term ) {
-                echo '<td>'.br_get_value_from_array($term, array('custom', $attr)).'</td>';
+                echo '<td>'.wp_kses_post( br_get_value_from_array($term, array('custom', $attr)) ).'</td>';
             }
             echo '</tr>';
         } 
     }
     if ( is_array( $name['acf'] ) && count( $name['acf'] ) > 0 ) {
         foreach ( $name['acf'] as $attr => $name_attr ) {
-            echo '<tr class="'.(is_array($same['acf'][$attr]) && count($same['acf'][$attr]) ? ' br_same_attr' : '').'" style="'.apply_filters('berocket_compare_acf_product_field_height', 'height:'.(15 + 20 * (empty($attr_count['acf'][$attr]) ? '1' : $attr_count['acf'][$attr])).'px!important;', $acf_field_list[$attr]) . '"><th>'.$name_attr.'</th>';
+            $row_style = apply_filters('berocket_compare_acf_product_field_height', 'height:'.absint( 15 + 20 * (empty($attr_count['acf'][$attr]) ? 1 : $attr_count['acf'][$attr]) ).'px!important;', $acf_field_list[$attr]);
+            echo '<tr class="'.(is_array($same['acf'][$attr]) && count($same['acf'][$attr]) ? ' br_same_attr' : '').'" style="'.esc_attr( safecss_filter_attr( $row_style ) ).'"><th>'.esc_html( $name_attr ).'</th>';
             foreach ( $terms as $term ) {
-                echo '<td>'.apply_filters('berocket_compare_acf_product_field', br_get_value_from_array($term, array('acf', $attr)), $acf_field_list[$attr], $term).'</td>';
+                echo '<td>'.wp_kses_post( apply_filters('berocket_compare_acf_product_field', br_get_value_from_array($term, array('acf', $attr)), $acf_field_list[$attr], $term) ).'</td>';
             }
             echo '</tr>';
         }
@@ -460,27 +469,27 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
 </table>
 </div>
 <?php
-$width_set = (empty($style['table']['colwidth']) ? 200 : $style['table']['colwidth']);
+$width_set = absint( empty($style['table']['colwidth']) ? 200 : $style['table']['colwidth'] );
 $width_set_full = $width_set * (count($terms) + 1);
 $width_set = $width_set * count($terms);
 ?>
 <style>
 .br_new_compare_block .br_top_table table,
 .br_new_compare_block .br_right_table table {
-    min-width:<?php echo $width_set ?>px!important;
+    min-width:<?php echo absint( $width_set ); ?>px!important;
 }
 @media (max-width: 767px) {
     .br_new_compare_block .br_top_table table,
     .br_new_compare_block .br_right_table table {
-        min-width:<?php echo $width_set_full ?>px!important;
+        min-width:<?php echo absint( $width_set_full ); ?>px!important;
     }
 }
 .br_new_compare .br_left_table .br_description_row,
 .br_new_compare .br_right_table .br_description_row {
-    height:<?php echo $description_height; ?>px!important;
+    height:<?php echo absint( $description_height ); ?>px!important;
 }
 .br_new_compare .br_right_table .br_description_row td div {
-    height:<?php echo $description_height-1; ?>px!important;
+    height:<?php echo absint( $description_height - 1 ); ?>px!important;
 }
 </style>
 <script>

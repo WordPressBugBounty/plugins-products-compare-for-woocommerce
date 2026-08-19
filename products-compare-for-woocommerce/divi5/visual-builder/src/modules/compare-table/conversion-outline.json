@@ -1,0 +1,13 @@
+{
+  "advanced": {
+    "fonts": {
+      "product_title": "productTitle.decoration.font",
+      "product_price": "productPrice.decoration.font",
+      "attribute_name": "attributeName.decoration.font",
+      "attribute_value": "attributeValue.decoration.font"
+    },
+    "admin_label": "module.meta.adminLabel",
+    "module": "module.advanced.htmlAttributes"
+  },
+  "module": {}
+}

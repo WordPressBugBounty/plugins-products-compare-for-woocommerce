@@ -113,7 +113,7 @@
         <tr><th colspan="5" style="text-align: center; font-size: 2em;"><?php _e('Table', 'products-compare-for-woocommerce') ?></th></tr>
         <tr>
             <th><?php _e('Column minimum width', 'products-compare-for-woocommerce') ?></th>
-            <th><?php _e('Image width', 'products-compare-for-woocommerce') ?></th>
+            <th><?php _e('Image size', 'products-compare-for-woocommerce') ?></th>
             <th><?php _e('Padding top', 'products-compare-for-woocommerce') ?></th>
             <th><?php _e('Background color', 'products-compare-for-woocommerce') ?></th>
             <th><?php _e('Background color for attributes with same value', 'products-compare-for-woocommerce') ?></th>
@@ -125,7 +125,10 @@
                 <input data-default="<?php echo $defaults['table']['colwidth']; ?>" type="text" placeholder="<?php _e('Theme Default', 'products-compare-for-woocommerce') ?>" name="<?php echo $settings_name; ?>[style_settings][table][colwidth]" value="<?php echo @ $options['table']['colwidth'] ?>" />
             </td>
             <td>
+                <p><?php _e('Image width', 'products-compare-for-woocommerce') ?></p>
                 <input data-default="<?php echo $defaults['table']['imgwidth']; ?>" type="text" placeholder="<?php _e('Theme Default', 'products-compare-for-woocommerce') ?>" name="<?php echo $settings_name; ?>[style_settings][table][imgwidth]" value="<?php echo @ $options['table']['imgwidth'] ?>" />
+                <p><?php _e('Image height', 'products-compare-for-woocommerce') ?></p>
+                <input data-default="<?php echo esc_attr( $defaults['table']['imgheight'] ); ?>" type="text" name="<?php echo esc_attr( $settings_name ); ?>[style_settings][table][imgheight]" value="<?php echo esc_attr( isset( $options['table']['imgheight'] ) ? $options['table']['imgheight'] : $defaults['table']['imgheight'] ); ?>" />
             </td>
             <td>
                 <input data-default="<?php echo $defaults['table']['toppadding']; ?>" type="text" placeholder="<?php _e('Theme Default', 'products-compare-for-woocommerce') ?>" name="<?php echo $settings_name; ?>[style_settings][table][toppadding]" value="<?php echo @ $options['table']['toppadding'] ?>" />

@@ -98,6 +98,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                 'table'                                 => array(
                     'colwidth'                              => '200',
                     'imgwidth'                              => '',
+                    'imgheight'                             => '200',
                     'toppadding'                            => '0',
                     'backcolor'                             => 'ffffff',
                     'backcolorsame'                         => '',
@@ -204,6 +205,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         $this->framework_data['fontawesome_frontend'] = true;
         $this->active_libraries = array('addons', 'popup', 'templates');
         parent::__construct( $this );
+        add_filter( 'brfr_sanitize_option_compare_products', array( $this, 'sanitize_plugin_options' ) );
         if( $this->check_framework_version() ) {
             if ( $this->init_validation() ) {
                 $options_global = $this->get_option();
@@ -225,9 +227,6 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                 if( empty($options['remove_compare_table']) ) {
                     add_filter ( 'the_content', array( $this, 'compare_page' ) );
                 }
-                if( isset($_GET['compare']) ) {
-                    $_GET['compare'] = urldecode($_GET['compare']);
-                }
                 add_filter('BeRocket_popup_open_page_elements', array($this, 'popup_open_page_elements'), 10, 2);
                 if( ! empty($options_global['template']) ) {
                     $template_data = $this->libraries->libraries_class['templates']->get_active_template_info($options_global['template']);
@@ -236,6 +235,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                     $this->theme_template = $theme_template;
                 }
                 add_action( 'divi_extensions_init', array($this, 'divi_initialize_extension') );
+                add_action( 'after_setup_theme', array($this, 'divi5_initialize'), 20 );
             }
         } else {
             add_filter( 'berocket_display_additional_notices', array(
@@ -381,26 +381,146 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         register_widget("berocket_compare_products_widget");
     }
 
-    public static function get_all_compare_products() {
-        if ( ! empty($_COOKIE['br_products_compare']) ) {
-            $cookie = $_COOKIE['br_products_compare'];
-            $products = explode( ',', $cookie );
-            return $products;
-        } else {
-            return false;
-        }
+    /**
+     * Return whether a product is safe to expose through the public compare UI.
+     *
+     * Compare IDs are fully controlled by visitors through a cookie or query
+     * parameter, so capability-aware APIs must not be used here: unpublished
+     * and password-protected products must never be disclosed by this endpoint.
+     */
+    public static function is_public_compare_product( $product_id ) {
+        $product_id = absint( $product_id );
+        $product    = $product_id ? get_post( $product_id ) : null;
+
+        return $product instanceof WP_Post
+            && 'product' === $product->post_type
+            && 'publish' === $product->post_status
+            && '' === $product->post_password;
     }
-    public static function is_set_cookie( $id ) {
-        if ( ! empty($_COOKIE['br_products_compare']) ) {
-            $cookie = $_COOKIE['br_products_compare'];
-            if ( preg_match( "/(^".$id.",)|(,".$id."$)|(,".$id.",)|(^".$id."$)/", $cookie ) ) {
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
+
+    /**
+     * Normalize visitor-controlled compare IDs and cap the amount of work.
+     */
+    public static function sanitize_compare_product_ids( $products, $limit = null ) {
+        if ( is_string( $products ) || is_numeric( $products ) ) {
+            $products = explode( ',', wp_unslash( (string) $products ) );
+        } elseif ( ! is_array( $products ) ) {
+            return array();
         }
+
+        if ( null === $limit ) {
+            $limit = (int) apply_filters( 'berocket_compare_products_limit', 20 );
+        }
+        $limit = max( 1, min( 100, (int) $limit ) );
+
+        $sanitized = array();
+        $checked   = 0;
+        foreach ( $products as $product_id ) {
+            if ( ! is_scalar( $product_id ) ) {
+                continue;
+            }
+
+            $product_id = absint( $product_id );
+            if ( ! $product_id || in_array( $product_id, $sanitized, true ) ) {
+                continue;
+            }
+
+            // Limit database lookups as well as rendered products.
+            if ( $checked >= $limit ) {
+                break;
+            }
+            $checked++;
+
+            if ( self::is_public_compare_product( $product_id ) ) {
+                $sanitized[] = $product_id;
+            }
+        }
+
+        return $sanitized;
+    }
+
+    public static function get_all_compare_products() {
+        $cookie = isset( $_COOKIE['br_products_compare'] ) ? $_COOKIE['br_products_compare'] : '';
+        return self::sanitize_compare_product_ids( $cookie );
+    }
+
+    public static function get_compare_request_products() {
+        if ( array_key_exists( 'compare', $_GET ) ) {
+            return self::sanitize_compare_product_ids( $_GET['compare'] );
+        }
+
+        return self::get_all_compare_products();
+    }
+
+    public static function is_set_cookie( $id ) {
+        return in_array( absint( $id ), self::get_all_compare_products(), true );
+    }
+
+    public static function sanitize_compare_template( $template ) {
+        return 'new-compare';
+    }
+
+    public static function sanitize_style_options( $options ) {
+        if ( ! is_array( $options ) ) {
+            return array();
+        }
+
+        foreach ( $options as $section => &$values ) {
+            if ( ! is_array( $values ) ) {
+                $values = array();
+                continue;
+            }
+
+            foreach ( $values as $key => &$value ) {
+                if ( ! is_scalar( $value ) ) {
+                    $value = '';
+                    continue;
+                }
+
+                $value = trim( (string) $value );
+                if ( false !== strpos( $key, 'color' ) ) {
+                    $value = ltrim( $value, '#' );
+                    $value = preg_match( '/^(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i', $value ) ? $value : '';
+                } elseif ( 'backopacity' === $key ) {
+                    $value = is_numeric( $value ) ? (string) min( 1, max( 0, (float) $value ) ) : '';
+                } else {
+                    $value = preg_match( '/^-?\d+(?:\.\d+)?$/', $value ) ? $value : '';
+                }
+            }
+            unset( $value );
+        }
+        unset( $values );
+
+        return $options;
+    }
+
+    public function sanitize_plugin_options( $settings ) {
+        if ( ! is_array( $settings ) ) {
+            return $this->defaults;
+        }
+
+        if ( isset( $settings['general_settings'] ) && is_array( $settings['general_settings'] ) ) {
+            $settings['general_settings']['compare_template'] = 'new-compare';
+            $settings['general_settings']['compare_page'] = isset( $settings['general_settings']['compare_page'] ) && is_scalar( $settings['general_settings']['compare_page'] )
+                ? absint( $settings['general_settings']['compare_page'] )
+                : 0;
+            $settings['general_settings']['addthisID'] = isset( $settings['general_settings']['addthisID'] ) && is_scalar( $settings['general_settings']['addthisID'] )
+                ? sanitize_key( $settings['general_settings']['addthisID'] )
+                : '';
+        }
+
+        if ( isset( $settings['style_settings'] ) ) {
+            $settings['style_settings'] = self::sanitize_style_options( $settings['style_settings'] );
+        }
+
+        if ( isset( $settings['text_settings'] ) && is_array( $settings['text_settings'] ) ) {
+            foreach ( $settings['text_settings'] as &$text ) {
+                $text = is_scalar( $text ) ? sanitize_text_field( $text ) : '';
+            }
+            unset( $text );
+        }
+
+        return $settings;
     }
 
     public function listener_products() {
@@ -412,7 +532,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
     public function compare_list() {
         $options_global = $this->get_option();
         $options = $options_global['general_settings'];
-        $template_name = ( empty($options['compare_template']) || $options['compare_template'] == 'compare' ? 'new-compare' : $options['compare_template'] );
+        $template_name = self::sanitize_compare_template( isset( $options['compare_template'] ) ? $options['compare_template'] : '' );
         set_query_var( 'is_full_screen', true );
         set_query_var( 'br_compare_apply_filters', ! empty($options_global['apply_filters']) );
         $this->br_get_template_part($template_name);
@@ -426,14 +546,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         $atts = array_merge(array(
             'noprod' => '1'
         ), $atts);
-        if( isset($_GET['compare']) && $_GET['compare'] ) {
-           $products = explode(',', $_GET['compare']);
-        } else {
-            $products = $this->get_all_compare_products();
-        }
-        if( ! is_array($products) ) {
-            $products = array();
-        }
+        $products = $this->get_compare_request_products();
         $has_prod = (! empty($products) && count($products) > 0);
         if( ($has_prod && empty($atts['noprod'])) || (! $has_prod && !empty($atts['noprod'])) ) {
             return $content;
@@ -455,8 +568,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             set_query_var( 'berocket_element_i', $element_i );
         }
         $atts = array_merge($default_atts, $atts);
-        $br_compare_uri = add_query_arg('compare', (empty($_COOKIE['br_products_compare']) ? '' : $_COOKIE['br_products_compare']), home_url( $wp->request ));
-        $template_name = ( empty($options['compare_template']) || $options['compare_template'] == 'compare' ? 'new-compare' : $options['compare_template'] );
+        $br_compare_uri = add_query_arg( 'compare', implode( ',', self::get_all_compare_products() ), home_url( $wp->request ) );
+        $template_name = self::sanitize_compare_template( isset( $options['compare_template'] ) ? $options['compare_template'] : '' );
         set_query_var( 'br_compare_apply_filters', ! empty($options_global['apply_filters']) );
         ob_start();
         $this->br_get_template_part($template_name);
@@ -467,8 +580,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         ob_start();
         ?>
         <script>
-        var br_compare_page = "<?php echo remove_query_arg('compare', home_url( $wp->request )); ?>";
-        var br_compare_uri = "<?php echo $br_compare_uri; ?>";
+        var br_compare_page = <?php echo wp_json_encode( remove_query_arg( 'compare', home_url( $wp->request ) ) ); ?>;
+        var br_compare_uri = <?php echo wp_json_encode( $br_compare_uri ); ?>;
         <?php
         if( ! isset($_GET['compare']) && ! empty($_COOKIE['br_products_compare']) ) {
         ?>
@@ -482,8 +595,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         <?php } ?>
         </script>
         <?php if( ! empty($atts['addthis']) ) { ?>
-        <div class="addthis_sharing_toolbox" data-url="<?php echo $br_compare_uri; ?>"></div>
-        <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=<?php echo $options['addthisID']; ?>"></script>
+        <div class="addthis_sharing_toolbox" data-url="<?php echo esc_url( $br_compare_uri ); ?>"></div>
+        <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=<?php echo esc_attr( sanitize_key( $options['addthisID'] ) ); ?>"></script>
         <?php
         }
         echo '<div class="woocommerce">'.$compare_page.'</div>';
@@ -502,11 +615,11 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             $page_id = apply_filters( 'wpml_object_id', $page_id, 'page', true, $default_language );
             if ( $page == $page_id ) {
                 ob_start();
-                $br_compare_uri = add_query_arg('compare', (empty($_COOKIE['br_products_compare']) ? '' : $_COOKIE['br_products_compare']), get_page_link($page));
+                $br_compare_uri = add_query_arg( 'compare', implode( ',', self::get_all_compare_products() ), get_page_link( $page ) );
                 ?>
                 <script>
-                var br_compare_page = "<?php echo get_page_link($page); ?>";
-                var br_compare_uri = "<?php echo $br_compare_uri; ?>";
+                var br_compare_page = <?php echo wp_json_encode( get_page_link( $page ) ); ?>;
+                var br_compare_uri = <?php echo wp_json_encode( $br_compare_uri ); ?>;
                 <?php
                 if( ! isset($_GET['compare']) && ! empty($_COOKIE['br_products_compare']) ) {
                 ?>
@@ -520,8 +633,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                 <?php } ?>
                 </script>
                 <?php if( ! empty($options['addthisID']) ) { ?>
-                <div class="addthis_sharing_toolbox" data-url="<?php echo $br_compare_uri; ?>"></div>
-                <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=<?php echo $options['addthisID']; ?>"></script>
+                <div class="addthis_sharing_toolbox" data-url="<?php echo esc_url( $br_compare_uri ); ?>"></div>
+                <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js#pubid=<?php echo esc_attr( sanitize_key( $options['addthisID'] ) ); ?>"></script>
                 <?php
                 }
                 if( ! empty($options['use_full_screen']) ) {
@@ -529,7 +642,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                     set_query_var( 'berocket_element_i', $element_i );
                 }
                 set_query_var( 'br_compare_apply_filters', ! empty($options_global['apply_filters']) );
-                $template_name = ( empty($options['compare_template']) || $options['compare_template'] == 'compare' ? 'new-compare' : $options['compare_template'] );
+                $template_name = self::sanitize_compare_template( isset( $options['compare_template'] ) ? $options['compare_template'] : '' );
                 $this->br_get_template_part($template_name);
                 $content = ob_get_clean() . $content;
             }
@@ -578,11 +691,11 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         $page_compare = intval($options['compare_page']);
         $page_compare = apply_filters( 'wpml_object_id', $page_compare, 'page', true );
         if( ! empty($atts) ) {
-            if( ! empty($atts['added_compare']) ) {
-                $text['added_compare'] = sanitize_text_field($atts['added_compare']);
+            if( ! empty($atts['added_compare']) && is_scalar( $atts['added_compare'] ) ) {
+                $text['added_compare'] = sanitize_text_field( $atts['added_compare'] );
             }
-            if( ! empty($atts['add_compare']) ) {
-                $text['add_compare'] = sanitize_text_field($atts['add_compare']);
+            if( ! empty($atts['add_compare']) && is_scalar( $atts['add_compare'] ) ) {
+                $text['add_compare'] = sanitize_text_field( $atts['add_compare'] );
             }
             if( isset($atts['fast_compare']) ) {
                 $options['fast_compare'] = ! empty($atts['fast_compare']);
@@ -601,35 +714,88 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             $button_class[] = 'berocket_product_smart_compare';
         }
         $button_class = implode(' ', $button_class);
-        $button_class = esc_html($button_class);
         $href_link = '#no_compare_page';
         if( get_post($page_compare) ) {
             $href_link = get_page_link($page_compare);
         }
-        echo '<a class="'.$button_class.'" data-id="'.$product_id.'" href="'.$href_link.'">
+        $added_text = empty( $text['added_compare'] ) ? __( 'Added', 'products-compare-for-woocommerce' ) : $text['added_compare'];
+        $add_text   = empty( $text['add_compare'] ) ? __( 'Compare Product', 'products-compare-for-woocommerce' ) : $text['add_compare'];
+        $button_text = $this->is_set_cookie( $product_id ) ? $added_text : $add_text;
+        echo '<a class="'.esc_attr( $button_class ).'" data-id="'.absint( $product_id ).'" href="'.esc_url( $href_link ).'">
             <i class="fa fa-square-o"></i>
             <i class="fa fa-check-square-o"></i>
-            <span class="br_compare_button_text" data-added="'.(empty($text['added_compare']) ? __( 'Added', 'products-compare-for-woocommerce' ) : $text['added_compare']).'" data-not_added="'.(empty($text['add_compare']) ? __( 'Compare Product', 'products-compare-for-woocommerce' ) : $text['add_compare']).'">
-            '.( $this->is_set_cookie($product_id) ? (empty($text['added_compare']) ? __( 'Added', 'products-compare-for-woocommerce' ) : $text['added_compare']) : (empty($text['add_compare']) ? __( 'Compare Product', 'products-compare-for-woocommerce' ) : $text['add_compare']) ).'
+            <span class="br_compare_button_text" data-added="'.esc_attr( $added_text ).'" data-not_added="'.esc_attr( $add_text ).'">
+            '.esc_html( $button_text ).'
             </span>
         </a>';
+    }
+
+    public static function sanitize_css_color( $color ) {
+        if ( is_array( $color ) ) {
+            if ( ! isset( $color['red'], $color['green'], $color['blue'] )
+                || ! is_scalar( $color['red'] )
+                || ! is_scalar( $color['green'] )
+                || ! is_scalar( $color['blue'] )
+                || ( isset( $color['alpha'] ) && ! is_scalar( $color['alpha'] ) )
+            ) {
+                return '';
+            }
+
+            $red   = min( 255, max( 0, (int) $color['red'] ) );
+            $green = min( 255, max( 0, (int) $color['green'] ) );
+            $blue  = min( 255, max( 0, (int) $color['blue'] ) );
+            $alpha = isset( $color['alpha'] ) ? min( 1, max( 0, (float) $color['alpha'] ) ) : 1;
+            return sprintf( 'rgba(%d,%d,%d,%s)', $red, $green, $blue, (string) $alpha );
+        }
+
+        if ( ! is_scalar( $color ) ) {
+            return '';
+        }
+
+        $color = trim( (string) $color );
+        $hex   = sanitize_hex_color( $color );
+        if ( $hex ) {
+            return $hex;
+        }
+
+        if ( preg_match( '/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/i', $color, $matches ) ) {
+            $red   = (int) $matches[1];
+            $green = (int) $matches[2];
+            $blue  = (int) $matches[3];
+            if ( $red > 255 || $green > 255 || $blue > 255 ) {
+                return '';
+            }
+
+            if ( isset( $matches[4] ) && '' !== $matches[4] ) {
+                return sprintf( 'rgba(%d,%d,%d,%s)', $red, $green, $blue, (string) (float) $matches[4] );
+            }
+            return sprintf( 'rgb(%d,%d,%d)', $red, $green, $blue );
+        }
+
+        return '';
     }
     
     public function acf_product_field($field_text, $field, $term) {
         if( is_array($field) && isset($field['type']) ) {
             if( $field['type'] == 'image' ) {
                 $img = get_field($field['name'], $term['id']);
+                if ( is_array( $img ) ) {
+                    $img = isset( $img['url'] ) ? $img['url'] : '';
+                } elseif ( is_numeric( $img ) ) {
+                    $img = wp_get_attachment_image_url( (int) $img, 'full' );
+                }
+                $img = is_scalar( $img ) ? esc_url( $img ) : '';
                 if( empty($img) ) {
                     $field_text = '';
                 } else {
-                    $field_text = '<img style="display:inline-block;max-height: 90px;max-width:100%;" src="'.$img.'">';
+                    $field_text = '<img style="display:inline-block;max-height:90px;max-width:100%;" src="'.$img.'" alt="">';
                 }
             } elseif($field['type'] == 'color_picker') {
-                $color = get_field($field['name'], $term['id']);
+                $color = self::sanitize_css_color( get_field($field['name'], $term['id']) );
                 if( empty($color) ) {
                     $field_text = '';
                 } else {
-                    $field_text = '<p><span style="border:2px solid black; display: inline-block; width: 30px;height:30px;background-color: '.$color.';"></span></p>';
+                    $field_text = '<p><span style="border:2px solid black;display:inline-block;width:30px;height:30px;background-color:'.esc_attr( $color ).';"></span></p>';
                 }
             }
         }
@@ -689,8 +855,12 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
     public function set_styles () {
         $options_global = $this->get_option();
         $general_options = $options_global['general_settings'];
-        $template_name = ( empty($general_options['compare_template']) || $general_options['compare_template'] == 'compare' ? 'new-compare' : $general_options['compare_template'] );
-        $options = $options_global['style_settings'];
+        $template_name = self::sanitize_compare_template( isset( $general_options['compare_template'] ) ? $general_options['compare_template'] : '' );
+        $options = self::sanitize_style_options( $options_global['style_settings'] );
+        $image_height = isset( $options['table']['imgheight'] ) && is_numeric( $options['table']['imgheight'] )
+            ? min( 1000, max( 50, (int) $options['table']['imgheight'] ) )
+            : 200;
+        $image_link_height = max( 1, $image_height - 1 );
         //TABLE STYLE
         if( $template_name == 'compare' ) {
             //OLD TABLE STYLE
@@ -902,6 +1072,16 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             echo '.br_new_compare_block .br_new_compare img {';
             echo 'width: '.$options['table']['imgwidth'].'px!important;';
             echo '}';
+            echo '.br_new_compare .br_right_table thead tr td, .br_new_compare .br_right_table thead tr th {';
+            echo 'height: '.$image_height.'px!important;';
+            echo 'block-size: '.$image_height.'px!important;';
+            echo '}';
+            echo '.br_new_compare .br_right_table thead tr td a, .br_new_compare .br_right_table thead tr th a {';
+            echo 'height: '.$image_link_height.'px!important;';
+            echo '}';
+            echo '.br_new_compare .br_left_table .br_header_row {';
+            echo 'height: '.$image_height.'px!important;';
+            echo '}';
             echo '.br_new_compare_block {';
             echo 'margin-top: '.$options['table']['margintop'].'px!important;';
             echo 'margin-bottom: '.$options['table']['marginbottom'].'px!important;';
@@ -993,7 +1173,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         echo '</style>';
         $javascript_css = $options_global['javascript_settings'];
         if( ! empty($javascript_css['custom_css']) ) {
-            echo '<style>'.$javascript_css['custom_css'].'</style>';
+            echo '<style>'.wp_strip_all_tags( $javascript_css['custom_css'] ).'</style>';
         }
     }
     public function admin_settings( $tabs_info = array(), $data = array() ) {
@@ -1289,7 +1469,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             if ( ( is_array( $options['attributes'] ) && in_array( $attr, $options['attributes'] ) ) || ! is_array( $options['attributes'] ) || count( $options['attributes'] ) == 0 ) {
                 $checked = ' checked';
             }
-            $html .= '<p><label><input name="' . $settings_name . '[general_settings][attributes][]" type="checkbox" value="' . $attr . '"' . $checked . '>' . $attr_label . '</label></p>';
+            $html .= '<p><label><input name="' . esc_attr( $settings_name ) . '[general_settings][attributes][]" type="checkbox" value="' . esc_attr( $attr ) . '"' . $checked . '>' . esc_html( $attr_label ) . '</label></p>';
         }
         if( function_exists('acf_get_field_groups') ) {
             $groups = acf_get_field_groups();
@@ -1303,8 +1483,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                                 $checked = ' checked';
                             }
                             $html .= '<p><label>
-                                <input name="' . $settings_name . '[general_settings][attributes][acf_br_fields][]" type="checkbox" value="' . $field['name'] . '"' . $checked . '>
-                                <strong>ACF </strong><small>[' . $group['title'] . ']</small> ' . $field['label'] . '
+                                <input name="' . esc_attr( $settings_name ) . '[general_settings][attributes][acf_br_fields][]" type="checkbox" value="' . esc_attr( $field['name'] ) . '"' . $checked . '>
+                                <strong>ACF </strong><small>[' . esc_html( $group['title'] ) . ']</small> ' . esc_html( $field['label'] ) . '
                             </label></p>';
                         }
                     }
@@ -1316,14 +1496,25 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
     }
     public function section_all_style($data, $options_global) {
         $settings_name = $this->values['settings_name'];
-        $options = $options_global['style_settings'];
+        $options = self::sanitize_style_options( $options_global['style_settings'] );
         $defaults = $this->defaults['style_settings'];
         ob_start();
-        include('templates/style_section.php');
+        include plugin_dir_path( __FILE__ ) . 'templates/style_section.php';
         return ob_get_clean();
     }
+    public function divi5_initialize() {
+        if( ! function_exists('et_builder_d5_enabled') || ! et_builder_d5_enabled() ) {
+            return;
+        }
+
+        $divi5_integration = plugin_dir_path( __FILE__ ) . 'divi5/includes/Integration.php';
+        if( file_exists($divi5_integration) ) {
+            require_once $divi5_integration;
+            BRCMP_Divi5_Integration::init();
+        }
+    }
     public function divi_initialize_extension() {
-        if( class_exists('DiviExtension') ) {
+        if( ( ! function_exists('et_builder_d5_enabled') || ! et_builder_d5_enabled() ) && class_exists('DiviExtension') ) {
             require_once plugin_dir_path( __FILE__ ) . 'divi/includes/CompareExtension.php';
         }
     }

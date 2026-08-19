@@ -1,0 +1,16 @@
+{
+  "advanced": {
+    "fonts": {
+      "button": "compareButton.decoration.font",
+      "check": "productLabel.decoration.font"
+    },
+    "admin_label": "module.meta.adminLabel",
+    "module": "module.advanced.htmlAttributes"
+  },
+  "module": {
+    "title": "title.innerContent.*",
+    "fast_compare": "fast_compare.innerContent.*",
+    "type": "type.innerContent.*",
+    "toolbar": "toolbar.innerContent.*"
+  }
+}

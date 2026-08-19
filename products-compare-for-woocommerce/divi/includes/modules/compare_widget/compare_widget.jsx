@@ -43,6 +43,7 @@ class BRCMP_compare_widget extends Component {
   componentDidMount() {
     var body = new FormData();
     body.append('action', 'brcompare_compare_widget');
+    body.append('nonce', window.brcompareDiviPreview ? window.brcompareDiviPreview.nonce : '');
     var newProps = this.props;
     Object.keys(newProps).forEach(key => {
       body.append(key, newProps[key]);

@@ -1,0 +1,19 @@
+{
+  "advanced": {
+    "fonts": {
+      "button": "button.decoration.font",
+      "check": "checkMark.decoration.font"
+    },
+    "borders": {
+      "default": "button.decoration.border"
+    },
+    "admin_label": "module.meta.adminLabel",
+    "module": "module.advanced.htmlAttributes"
+  },
+  "module": {
+    "product": "content.advanced.product.*",
+    "fast_compare": "fast_compare.innerContent.*",
+    "add_compare": "add_compare.innerContent.*",
+    "added_compare": "added_compare.innerContent.*"
+  }
+}

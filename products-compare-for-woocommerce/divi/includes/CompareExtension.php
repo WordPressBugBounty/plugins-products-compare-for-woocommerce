@@ -14,11 +14,13 @@ class BRCMP_CompareExtension extends DiviExtension {
         add_action('wp_ajax_brcompare_compare_widget', array($this, 'compare_widget'));
 	}
     public function compare_widget() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die();
-        }
-        $atts = berocket_sanitize_array($_POST);
-        $atts = self::convert_on_off($atts);
+        $this->verify_ajax_request();
+        $posted = wp_unslash( $_POST );
+        $atts = array(
+            'fast_compare' => ! empty( $posted['fast_compare'] ) && 'off' !== $posted['fast_compare'],
+            'type'         => BeRocket_Compare_Products_Widget::sanitize_type( isset( $posted['type'] ) ? $posted['type'] : '' ),
+            'toolbar'      => ! empty( $posted['toolbar'] ) && 'off' !== $posted['toolbar'],
+        );
         if( ! empty($atts['toolbar']) ) {
             echo '<div style="height:50px;"></div>';
         }
@@ -26,29 +28,39 @@ class BRCMP_CompareExtension extends DiviExtension {
         wp_die();
     }
     public function compare_table() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die();
-        }
+        $this->verify_ajax_request();
         $filter = do_shortcode('[br_compare_table]');
         echo $filter;
         wp_die();
     }
     public function compare_button() {
-        if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die();
-        }
-        $atts = berocket_sanitize_array($_POST);
-        $atts = self::convert_on_off($atts) ;
+        $this->verify_ajax_request();
+        $posted = wp_unslash( $_POST );
+        $atts = array(
+            'product'       => isset( $posted['product'] ) && is_scalar( $posted['product'] ) ? sanitize_text_field( $posted['product'] ) : '',
+            'added_compare' => isset( $posted['added_compare'] ) && is_scalar( $posted['added_compare'] ) ? sanitize_text_field( $posted['added_compare'] ) : '',
+            'add_compare'   => isset( $posted['add_compare'] ) && is_scalar( $posted['add_compare'] ) ? sanitize_text_field( $posted['add_compare'] ) : '',
+            'fast_compare'  => ! empty( $posted['fast_compare'] ) && 'off' !== $posted['fast_compare'],
+        );
         if( ! empty($atts['product']) ) {
-            if( $atts['product'] == 'latest' ) {
+            if( 'latest' === $atts['product'] ) {
                 global $wpdb;
                 $atts['product'] = $wpdb->get_var("SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status = 'publish' ORDER BY ID DESC LIMIT 1");
-            } elseif( $atts['product'] == 'current' ) {
+            } elseif( 'current' === $atts['product'] ) {
                 $atts['product'] = '';
+            } else {
+                $atts['product'] = absint( $atts['product'] );
             }
         }
         do_action('br_compare_button_options', $atts);
         wp_die();
+    }
+    private function verify_ajax_request() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( esc_html__( 'You are not allowed to preview this module.', 'products-compare-for-woocommerce' ), '', array( 'response' => 403 ) );
+        }
+
+        check_ajax_referer( 'brcompare_divi_preview', 'nonce' );
     }
 	public function wp_hook_enqueue_scripts() {
 		if ( $this->_debug ) {
@@ -73,6 +85,14 @@ class BRCMP_CompareExtension extends DiviExtension {
 		if ( et_core_is_fb_enabled() && ! empty( $this->_builder_js_data ) ) {
 			wp_localize_script( "{$this->name}-builder-bundle", "{$extension_name}BuilderData", $this->_builder_js_data );
 		}
+
+        if ( et_core_is_fb_enabled() ) {
+            wp_localize_script(
+                "{$this->name}-builder-bundle",
+                'brcompareDiviPreview',
+                array( 'nonce' => wp_create_nonce( 'brcompare_divi_preview' ) )
+            );
+        }
 	}
     public static function convert_on_off($atts) {
         foreach($atts as &$attr) {
