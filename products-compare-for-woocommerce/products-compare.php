@@ -6,7 +6,7 @@
  * Version: 3.6.4
  * Author: BeRocket
  * Requires at least: 5.0
- * Tested up to: 7.0.4
+ * Tested up to: 7.1
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * Author URI: https://berocket.com?utm_source=free_plugin&utm_medium=plugins&utm_campaign=compare_products
