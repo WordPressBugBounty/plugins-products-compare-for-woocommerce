@@ -11,6 +11,7 @@ if( empty( $is_full_screen ) ) {
 }
 $BeRocket_Compare_Products = BeRocket_Compare_Products::getInstance();
 $options_global = $BeRocket_Compare_Products->get_option();
+$table_design = BeRocket_Compare_Table_Designs::normalize( isset( $options_global['table_design'] ) ? $options_global['table_design'] : 'manual' );
 $options = $options_global['general_settings'];
 $style = $options_global['style_settings'];
 $text = $options_global['text_settings'];
@@ -286,9 +287,9 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
 }
 ?>
 <div class="br_compare_popup_block"<?php if(! empty($berocket_element_i)) echo ' id="br_popup_'.absint( $berocket_element_i ).'"'; ?>>
-<div class="br_new_compare_block" data-table_scroll="0" data-table_hidden_scroll="0" data-is_full_screen="<?php echo (empty($is_full_screen) ? "0" : "1"); ?>">
+<div class="br_new_compare_block<?php echo esc_attr( BeRocket_Compare_Table_Designs::classes( $table_design ) ); ?>"<?php if ( 'manual' !== $table_design ) { $design_width = absint( empty( $style['table']['colwidth'] ) ? 200 : $style['table']['colwidth'] ); echo ' style="--br-cmp-products-width:' . absint( $design_width * count( $terms ) ) . 'px;--br-cmp-column-width:' . $design_width . 'px;"'; } ?> data-table_scroll="0" data-table_hidden_scroll="0" data-is_full_screen="<?php echo (empty($is_full_screen) ? "0" : "1"); ?>">
 <div style="clear:both;"></div>
-<div class="br_top_table">
+<div class="<?php echo 'manual' === $table_design ? 'br_top_table' : 'br-compare-table-tools'; ?>">
 <?php
     if( $have_dif && ! empty($options['hide_same_button']) ) {
         echo '<a class="br_show_compare_dif'.(! empty( $options['hide_same_default'] ) ? ' br_hidden_same' : '').'" href="#difference">'.esc_html( ! empty( $options['hide_same_default'] )
@@ -299,11 +300,12 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
     if( ! empty($options['remove_all_compare']) ) {
         echo '<a class="br_remove_all_compare" href="#remove_all">'.esc_html( empty($text['remove_all_compare_text']) ? __( 'Clear compare list', 'products-compare-for-woocommerce' ) : $text['remove_all_compare_text'] ).'</a>';
     }
-    $top_table_html = '
-        <table>';
+    if ( 'manual' !== $table_design ) { echo '</div><div class="br_top_table">'; }
+    $design_columns = 'manual' === $table_design ? '' : BeRocket_Compare_Table_Designs::columns( count( $terms ) );
+    $top_table_html = '<table>' . $design_columns;
     $top_table_html2 = '<td></td>';
     $top_table_html .= '
-            <tr><td></td>';
+            <tr><td>' . ( 'manual' === $table_design ? '' : esc_html__( 'Product', 'products-compare-for-woocommerce' ) ) . '</td>';
     foreach ( $terms as $term ) {
         $top_table_html .= '<th><div>
             <h3><a href="'.esc_url( $term['link'] ).'">'.esc_html( $term['title'] ).'</a></h3>';
@@ -325,7 +327,8 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
         }
         $default_language= apply_filters( 'wpml_default_language', NULL );
         $default_product = apply_filters( 'wpml_object_id', $term['id'], 'product', true, $default_language );
-        $top_table_html .= '<a href="#remove" class="br_remove_compare_product_reload" data-id="'.absint( $default_product ).'"><i class="fa fa-times"></i></a>';
+        $remove_label = 'manual' === $table_design ? '' : ' aria-label="' . esc_attr( sprintf( __( 'Remove %s from comparison', 'products-compare-for-woocommerce' ), $term['title'] ) ) . '"';
+        $top_table_html .= '<a href="#remove" class="br_remove_compare_product_reload" data-id="'.absint( $default_product ).'"' . $remove_label . '><i class="fa fa-times"></i></a>';
         $top_table_html .= '</div></th>';
     }
     $top_table_html .= '
@@ -339,7 +342,7 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
     <div class="br_main_top">
         <?php echo $top_table_html; ?>
     </div>
-    <div class="br_opacity_top">
+    <div class="br_opacity_top"<?php echo 'manual' === $table_design ? '' : ' inert aria-hidden="true"'; ?>>
         <?php echo $top_table_html; ?>
     </div>
 </div>
@@ -380,6 +383,7 @@ if ( $options['use_full_screen'] || ! empty($is_full_screen) ) {
 </table>
 <div class="br_right_table">
 <table>
+    <?php echo $design_columns; ?>
     <?php if ( ! is_array( $options['attributes'] ) || in_array( 'cp_image', $options['attributes'] ) || count( $options['attributes'] ) == 0 ) { ?>
     <thead>
         <tr>

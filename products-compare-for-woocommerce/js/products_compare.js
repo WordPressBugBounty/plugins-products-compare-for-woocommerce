@@ -6,6 +6,11 @@ jQuery(window).on('popstate', function(event) {
 });
 (function ($){
     $(document).ready( function () {
+        // WooCommerce inserts View cart after its added_to_cart event handlers run.
+        $(document.body).on('added_to_cart', function() {
+            setTimeout(berocket_compare_design_header_height, 0);
+        });
+        $(window).on('resize', berocket_compare_design_header_height);
         $(document).on( 'click', '.br_compare_button .fa', function ( event ) {
             $button = $(this).parent();
             event.preventDefault();
@@ -274,6 +279,15 @@ function compare_products_execute_func ( func ) {
         }
     }
 }
+function berocket_compare_design_header_height() {
+    jQuery('.br_new_compare_block.br_compare_design').each(function() {
+        var $header = jQuery(this).find('.br_main_top').first();
+        // The absolute header needs the same space reserved by its inert copy.
+        // Without a dynamic cart link, keep the native automatic height.
+        jQuery(this).find('.br_opacity_top').first().css('height',
+            $header.find('.added_to_cart').length ? $header.outerHeight() : '');
+    });
+}
 function berocket_popup_compare_scroll_fix() {
     jQuery('.br_popup_inner:not(.br_compare_scroll_ready), .br_new_compare_block:not(.br_compare_scroll_ready)').each(function() {
         if( jQuery(this).is('.br_popup_inner') ) {
@@ -335,4 +349,5 @@ function berocket_popup_compare_scroll_fix() {
         });
         jQuery(this).addClass('br_compare_scroll_ready');
     });
+    berocket_compare_design_header_height();
 }

@@ -4,8 +4,8 @@ Contributors: berocket, dholovnia
 Donate link: https://berocket.com/?utm_source=wordpress_org&utm_medium=donate&utm_campaign=compare_products
 Tags: compare, comparison, woocommerce, product comparison, table
 Requires at least: 5.0
-Tested up to: 7.1
-Stable tag: 3.6.4
+Tested up to: 7.1.3
+Stable tag: 3.7
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,16 @@ Products Compare for WooCommerce will add a new sub-menu item called "Products C
 
 == Frequently Asked Questions ==
 
+= How do I add the comparison table in the block editor? =
+Add the **BeRocket Compare Table** block to a page and save it. The editor displays an explanatory empty preview; the published page displays the current visitor's comparison list. Select products using the existing Compare buttons in your shop. Table fields, styles and buttons follow Products Compare settings. If this is your configured Compare Page, the plugin does not add a second automatic table.
+
+Pages containing the block are marked private and non-cacheable, even with an empty list. Purge existing page caches after adding the block. If your page-cache plugin or CDN ignores WordPress cache exclusions or Cache-Control headers, explicitly exclude these page URLs from full-page caching. Do the same for custom placements in widgets or third-party templates.
+
+= How do I change the comparison table design? =
+Open Products Compare settings, go to Style and choose a Table design. Clean, Soft Stripes, Outline, Editorial, Dark, Ocean, Forest and Compact include an instant example preview and are available in Free and Paid. Save your settings to apply the design to the Compare Page, shortcode, Gutenberg block and popup tables.
+
+Manual/Default keeps your existing appearance. Presets replace table colours, borders, spacing and button styling without overwriting saved manual values. Switch back to Manual/Default to use those values again. Column and image sizes continue to apply to every design. New designs include wrapping values and horizontally scrollable tables with sticky characteristic names on narrow screens.
+
 = Is it compatible with all WordPress themes? =
 Compatibility with all themes is impossible, because they are too many, but generally if themes are developed according to WordPress and WooCommerce guidelines, BeRocket plugins are compatible with them.
 
@@ -86,6 +96,14 @@ If none of the previous listed actions helps you solve the problem, then, submit
 ---
 
 == Changelog ==
+
+= 3.7 =
+* Feature - Added a Gutenberg comparison table block with visitor-specific product lists.
+* Feature - Added eight comparison table designs with live previews.
+* Fix - Kept View cart links below Add to cart buttons in comparison tables.
+* Enhancement - Added or improved settings import/export and backup restoration.
+* Enhancement - Updated BeRocket Framework to 3.1.3 with CDN release metadata, reduced updater API traffic, isolated invalid catalog records, improved banner tracking, and an SVG account icon.
+* Enhancement - Updated compatibility declarations for WordPress 7.1.3 and WooCommerce 11.2.1.
 
 = 3.6.4 =
 * Enhancement - Updated BeRocket framework.

@@ -1,0 +1,12 @@
+.br-compare-table-editor .components-placeholder__fieldset {
+    display: block;
+}
+.br-compare-table-editor p {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.br-compare-table-editor p:last-child {
+    margin-bottom: 0;
+    color: #50575e;
+}

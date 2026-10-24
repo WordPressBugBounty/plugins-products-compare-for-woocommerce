@@ -18,6 +18,16 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
     public $theme_template;
     public static $settings_name = 'br-compare-products-options';
     protected static $instance;
+    public $import_export = array(
+        'general_settings' => array(
+            'compare_page' => array(
+                'export_type' => 'post',
+                'post_type'   => 'page',
+                'passthrough' => array('', 0, '0', false),
+                'on_missing'  => 'remove',
+            ),
+        ),
+    );
     protected $plugin_version_capability = 15;
     protected $disable_settings_for_admin = array(
         array('javascript_settings', 'before_load'),
@@ -62,6 +72,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             'plugin_dir'  => __DIR__,
         );
         $this->defaults = array(
+            'table_design'      => 'manual',
             'template'          => '',
             'apply_filters'     => '',
             'general_settings'  => array(
@@ -206,6 +217,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         $this->active_libraries = array('addons', 'popup', 'templates');
         parent::__construct( $this );
         add_filter( 'brfr_sanitize_option_compare_products', array( $this, 'sanitize_plugin_options' ) );
+        add_filter( 'brfr_sanitize_option_compare_products', array( 'BeRocket_Compare_Table_Designs', 'preserve_manual_settings' ), 9, 2 );
         if( $this->check_framework_version() ) {
             if ( $this->init_validation() ) {
                 $options_global = $this->get_option();
@@ -345,6 +357,9 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         $options_global = $this->get_option();
         wp_register_style( 'berocket_compare_products_style', plugins_url( 'css/products_compare.css', __FILE__ ), "", BeRocket_Compare_Products_version );
         wp_enqueue_style( 'berocket_compare_products_style' );
+        if ( 'manual' !== BeRocket_Compare_Table_Designs::normalize( isset( $options_global['table_design'] ) ? $options_global['table_design'] : 'manual' ) ) {
+            BeRocket_Compare_Table_Designs::enqueue();
+        }
         wp_enqueue_script( 'berocket_jquery_cookie', plugins_url( 'js/jquery.cookie.js', __FILE__ ), array( 'jquery' ), BeRocket_Compare_Products_version );
         wp_enqueue_script( 'berocket_compare_products_script', plugins_url( 'js/products_compare.js', __FILE__ ), array( 'jquery' ), BeRocket_Compare_Products_version );
         wp_enqueue_script( 'jquery-mousewheel', plugins_url( 'js/jquery.mousewheel.min.js', __FILE__ ), array( 'jquery' ), BeRocket_Compare_Products_version );
@@ -498,6 +513,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         if ( ! is_array( $settings ) ) {
             return $this->defaults;
         }
+        $settings['table_design'] = BeRocket_Compare_Table_Designs::normalize( isset( $settings['table_design'] ) ? $settings['table_design'] : 'manual' );
 
         if ( isset( $settings['general_settings'] ) && is_array( $settings['general_settings'] ) ) {
             $settings['general_settings']['compare_template'] = 'new-compare';
@@ -554,9 +570,14 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         return '';
     }
     public function shortcode($atts = array()) {
+        global $wp;
+        return $this->render_compare_table( $atts, home_url( $wp->request ) );
+    }
+
+    /** Shared renderer; a block can supply its page permalink (including plain URLs). */
+    public function render_compare_table( $atts, $page_url ) {
         $options_global = $this->get_option();
         $options = $options_global['general_settings'];
-        global $wp;
         $default_atts = array(
             'addthis' => '0',
         );
@@ -568,7 +589,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
             set_query_var( 'berocket_element_i', $element_i );
         }
         $atts = array_merge($default_atts, $atts);
-        $br_compare_uri = add_query_arg( 'compare', implode( ',', self::get_all_compare_products() ), home_url( $wp->request ) );
+        $br_compare_uri = add_query_arg( 'compare', implode( ',', self::get_all_compare_products() ), $page_url );
         $template_name = self::sanitize_compare_template( isset( $options['compare_template'] ) ? $options['compare_template'] : '' );
         set_query_var( 'br_compare_apply_filters', ! empty($options_global['apply_filters']) );
         ob_start();
@@ -580,7 +601,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         ob_start();
         ?>
         <script>
-        var br_compare_page = <?php echo wp_json_encode( remove_query_arg( 'compare', home_url( $wp->request ) ) ); ?>;
+        var br_compare_page = <?php echo wp_json_encode( remove_query_arg( 'compare', $page_url ) ); ?>;
         var br_compare_uri = <?php echo wp_json_encode( $br_compare_uri ); ?>;
         <?php
         if( ! isset($_GET['compare']) && ! empty($_COOKIE['br_products_compare']) ) {
@@ -613,7 +634,9 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         if( ! empty( $page_id ) && $wp_query->is_main_query() ) {
             $default_language = apply_filters( 'wpml_default_language', NULL );
             $page_id = apply_filters( 'wpml_object_id', $page_id, 'page', true, $default_language );
-            if ( $page == $page_id ) {
+            // An explicitly placed block owns table placement on this page.
+            if ( $page == $page_id && false === strpos( $content, 'br-compare-table-block' )
+                && ! BeRocket_Compare_Products_Block::contains_table( get_post_field( 'post_content', $page_id ) ) ) {
                 ob_start();
                 $br_compare_uri = add_query_arg( 'compare', implode( ',', self::get_all_compare_products() ), get_page_link( $page ) );
                 ?>
@@ -816,6 +839,8 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         wp_enqueue_script( 'berocket_compare_products_admin_script', plugins_url( 'js/admin.js', __FILE__ ), array( 'jquery' ) );
         wp_register_style( 'berocket_compare_products_admin_style', plugins_url( 'css/admin.css', __FILE__ ), "", BeRocket_Compare_Products_version );
         wp_enqueue_style( 'berocket_compare_products_admin_style' );
+        wp_register_style( 'berocket_compare_products_style', plugins_url( 'css/products_compare.css', __FILE__ ), array(), BeRocket_Compare_Products_version );
+        BeRocket_Compare_Table_Designs::enqueue( true );
     }
 
     public function activation() {
@@ -1321,6 +1346,7 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
                 ),
             ),
             'Style' => array(
+                'table_design' => array( 'label' => '', 'section' => 'table_design' ),
                 'all_style' => array(
                     "label"     => "",
                     "section"   => 'all_style'
@@ -1501,6 +1527,9 @@ class BeRocket_Compare_Products extends BeRocket_Framework {
         ob_start();
         include plugin_dir_path( __FILE__ ) . 'templates/style_section.php';
         return ob_get_clean();
+    }
+    public function section_table_design( $data, $options_global ) {
+        return BeRocket_Compare_Table_Designs::field( $options_global );
     }
     public function divi5_initialize() {
         if( ! function_exists('et_builder_d5_enabled') || ! et_builder_d5_enabled() ) {
